@@ -1,101 +1,172 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { WeatherCard } from '@/components/weather/weather-card'
+import { CryptoPriceCard } from '@/components/crypto/crypto-price-card'
+import { PortfolioCard } from '@/components/coinbase/portfolio-card'
+import { ThemeToggle } from '@/components/theme-toggle'
+
+interface Portfolio {
+  portfolio_id: string;
+  name: string;
+  entity_id: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [weatherData, setWeatherData] = useState(null)
+  const [cryptoData, setCryptoData] = useState({ btc: null, eth: null })
+  const [portfolioData, setPortfolioData] = useState<Portfolio[]>([])
+  
+  const [isLoadingWeather, setIsLoadingWeather] = useState(true)
+  const [isLoadingCrypto, setIsLoadingCrypto] = useState(true)
+  const [isLoadingPortfolios, setIsLoadingPortfolios] = useState(true)
+  
+  const [weatherError, setWeatherError] = useState('')
+  const [cryptoError, setCryptoError] = useState('')
+  const [portfolioError, setPortfolioError] = useState('')
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const formatTimeForZone = (date: Date, timeZone: string) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timeZone
+    })
+  }
+
+  const formatDate = (date: Date, timeZone: string) => {
+    return date.toLocaleDateString('en-US', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: timeZone
+    })
+  }
+
+  const fetchWeather = useCallback(async () => {
+    try {
+      setIsLoadingWeather(true)
+      const latitude = 24.4539
+      const longitude = 54.3773
+      
+      const response = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`)
+      if (!response.ok) throw new Error('Failed to fetch weather')
+      
+      const data = await response.json()
+      const now = new Date()
+      
+      setWeatherData({
+        location: "Abu Dhabi",
+        temperature: Math.round(data.main.temp),
+        condition: data.weather[0].main,
+        description: data.weather[0].description,
+        date: formatDate(now, 'Asia/Dubai'),
+        timestamp: formatTimeForZone(now, 'Asia/Dubai'),
+        estTime: formatTimeForZone(now, 'America/New_York')
+      })
+      setWeatherError('')
+    } catch (err: any) {
+      setWeatherError(err.message)
+    } finally {
+      setIsLoadingWeather(false)
+    }
+  }, [])
+
+  const fetchCryptoPrices = useCallback(async () => {
+    try {
+      setIsLoadingCrypto(true)
+      const response = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true'
+      )
+      if (!response.ok) throw new Error('Failed to fetch price data')
+      
+      const data = await response.json()
+      
+      setCryptoData({
+        btc: {
+          symbol: 'BTC',
+          current_price: data.bitcoin.usd,
+          price_change_percentage_24h: data.bitcoin.usd_24h_change,
+          last_updated: new Date(data.bitcoin.last_updated_at * 1000).toISOString()
+        },
+        eth: {
+          symbol: 'ETH',
+          current_price: data.ethereum.usd,
+          price_change_percentage_24h: data.ethereum.usd_24h_change,
+          last_updated: new Date(data.ethereum.last_updated_at * 1000).toISOString()
+        }
+      })
+      setCryptoError('')
+    } catch (err: any) {
+      setCryptoError(err.message)
+    } finally {
+      setIsLoadingCrypto(false)
+    }
+  }, [])
+
+  const fetchPortfolios = useCallback(async () => {
+    try {
+      setIsLoadingPortfolios(true)
+      const response = await fetch('/api/coinbase/portfolios')
+      if (!response.ok) throw new Error('Failed to fetch portfolio data')
+      
+      const data = await response.json()
+      setPortfolioData(data.portfolios)
+      setPortfolioError('')
+    } catch (err: any) {
+      setPortfolioError(err.message)
+    } finally {
+      setIsLoadingPortfolios(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Initial fetches
+    fetchWeather()
+    fetchCryptoPrices()
+    fetchPortfolios()
+    
+    // Set up intervals for auto-refresh
+    const weatherInterval = setInterval(fetchWeather, 60000) // Every minute
+    const cryptoInterval = setInterval(fetchCryptoPrices, 30000) // Every 30 seconds
+    const portfolioInterval = setInterval(fetchPortfolios, 60000) // Every minute
+    
+    // Cleanup intervals on unmount
+    return () => {
+      clearInterval(weatherInterval)
+      clearInterval(cryptoInterval)
+      clearInterval(portfolioInterval)
+    }
+  }, [fetchWeather, fetchCryptoPrices, fetchPortfolios])
+
+  return (
+    <main className="min-h-screen p-4 md:p-24">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex justify-end mb-4">
+          <ThemeToggle />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <WeatherCard
+            data={weatherData}
+            isLoading={isLoadingWeather}
+            error={weatherError}
+            onRefresh={fetchWeather}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+          <CryptoPriceCard
+            data={cryptoData}
+            isLoading={isLoadingCrypto}
+            error={cryptoError}
+            onRefresh={fetchCryptoPrices}
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
+          <PortfolioCard
+            data={portfolioData}
+            isLoading={isLoadingPortfolios}
+            error={portfolioError}
+            onRefresh={fetchPortfolios}
           />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+        </div>
+      </div>
+    </main>
+  )
 }
